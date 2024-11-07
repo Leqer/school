@@ -1,28 +1,48 @@
 <?php
-session_start();
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
 require 'db_connect.php';
-require 'Lotto.php';
-$userNumbers = $_SESSION['userNumbers'];
-$lotto = new Lotto();
-$randomNumbers = $lotto->generateNumbers();
-$matches = $lotto->checkMatches($userNumbers, $randomNumbers);
-$numberOfMatches = count($matches);
-$userNumbersStr = implode(", ", $userNumbers);
-$randomNumbersStr = implode(", ", $randomNumbers);
-$matchesCount = $numberOfMatches;
-$sql = "INSERT INTO results (user_numbers, random_numbers, matches) VALUES (:user_numbers, :random_numbers, :matches)";
-$stmt = $pdo->prepare($sql);
-$stmt->bindParam(':user_numbers', $userNumbersStr);
-$stmt->bindParam(':random_numbers', $randomNumbersStr);
-$stmt->bindParam(':matches', $matchesCount);
-if ($stmt->execute()) {
-    echo "Dane zostały pomyślnie zapisane!\n";
+
+use Domain\Player;
+use Domain\Drawing;
+use Domain\Game;
+
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    $userNumbers = $_POST['userNumbers'];
+
+    if (count($userNumbers) === 6 && allNumbersValid($userNumbers)) {
+        $player = new Player($userNumbers);
+        $drawing = new Drawing();
+        $game = new Game($player, $drawing);
+        $playerNumbers = $game->getPlayerNumbers();
+        $drawingNumbers = $game->getDrawingNumbers();
+        $matches = $game->getMatches();
+        $prize = $game->getPrize();
+
+
+        $response = [
+            'userNumbers' => $playerNumbers,
+            'randomNumbers' => $drawingNumbers,
+            'matches' => $matches,
+            'numberOfMatches' => count($matches),
+            'prize' => $prize
+        ];
+
+        header('Content-Type: application/json');
+        echo json_encode($response);
+    } else {
+        echo json_encode(['error' => 'Please select exactly 6 valid numbers.']);
+    }
 } else {
-    echo "Wystąpił błąd podczas zapisywania danych.";
+    echo json_encode(['error' => 'Invalid request method.']);
 }
-$prize = $lotto->calculatePrize($numberOfMatches);
-echo "Wylosowane liczby: " . implode(", ", $randomNumbers) . "\n";
-echo "Trafiłeś " . $numberOfMatches . " liczb(y): " . implode(", ", $matches) . "\n";
-echo "Twoja wygrana: " . $prize . "\n";
-echo "<p><a href='results.php'>Zobacz historię gier</a></p>";
-?>
+
+function allNumbersValid($numbers) {
+    foreach ($numbers as $number) {
+        if ($number < 1 || $number > 49) {
+            return false;
+        }
+    }
+    return true;
+}
